@@ -37,6 +37,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/search/impl/search.hpp>
 
 // Bayesian filtering library
 #include <filter/extendedkalmanfilter.h>

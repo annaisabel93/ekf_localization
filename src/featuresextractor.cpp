@@ -1,4 +1,5 @@
 #include "featuresextractor.h"
+#include <pcl/search/impl/search.hpp>
 
 FeaturesExtractor::FeaturesExtractor()
 {
