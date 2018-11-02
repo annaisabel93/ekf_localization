@@ -1,7 +1,8 @@
 <?xml version="1.0"?>
 <launch>
   <!-- Map file path, without extensions -->
-  <arg name="map_file" default="/home/glawless/datasets/turtlebot_datasets/map" />
+  <!-- Use $(rospack find PACKAGE) -->
+  <arg name="map_file" default="PATH_TO_MAP/map" />
 
   <!-- Disable if running online and not from a bag -->
   <param name="use_sim_time" value="true" />
