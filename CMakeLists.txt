@@ -16,7 +16,8 @@ find_package(catkin REQUIRED
   tf
   tf_conversions
   laser_geometry
-pcl_ros)
+  pcl_ros
+)
 
 catkin_package(
 #  INCLUDE_DIRS include
