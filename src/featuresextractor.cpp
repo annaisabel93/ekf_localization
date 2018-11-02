@@ -30,7 +30,7 @@ std::vector<cv::Point2f> FeaturesExtractor::mapFeatures(cv::Mat & map,
     }
 
     //Scale
-    for(int gp=0;gp<corners.size();gp++)
+    for(std::size_t gp=0;gp<corners.size();gp++)
     {
         corners[gp].x-=map.cols/2.0;
         corners[gp].y-=map.rows/2.0;

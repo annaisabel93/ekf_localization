@@ -90,7 +90,7 @@ class EKFnode
 
     double alpha_1, alpha_2, alpha_3, alpha_4;
     double d_thresh_, a_thresh_;
-    double voxel_grid_size;
+    double voxel_grid_size_;
 
     //paramater to store latest odom pose
     tf::Stamped<tf::Pose> latest_odom_pose_;
@@ -135,8 +135,8 @@ class EKFnode
 
 public:
 
-    EKFnode(const ros::NodeHandle& nh, const double & spin_rate, const double & voxel_grid_size_=0.005);
+    EKFnode();
 
-    void spin(const ros::TimerEvent& e);
+    void spin();
 };
 

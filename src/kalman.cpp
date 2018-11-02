@@ -1,17 +1,16 @@
 #include "kalman.hpp"
 
-EKFnode::EKFnode(const ros::NodeHandle& nh, const double & spin_rate, const double & voxel_grid_size_) :
-    nh_(nh),
+EKFnode::EKFnode() :
     nh_priv("~"),
-    listener(new tf::TransformListener(ros::Duration(100.0))),
-    map_(new pcl::PointCloud<point_type>()),
+    nh_(""),
+    listener(new tf::TransformListener(ros::Duration(5.0))),
+    first_map_received_(false),
     laser(new pcl::PointCloud<point_type>()),
-    voxel_grid_size(voxel_grid_size_),
+    map_(new pcl::PointCloud<point_type>()),
     odom_active_(false),
     laser_active_(false),
     odom_initialized_(false),
-    laser_initialized_(false),
-    first_map_received_(false)
+    laser_initialized_(false)
 {
     nh_priv.param<std::string>("base_frame_id",base_link, "base_link");
     nh_priv.param<std::string>("odom_frame_id",odom_link, "odom");
@@ -41,6 +40,8 @@ EKFnode::EKFnode(const ros::NodeHandle& nh, const double & spin_rate, const doub
     nh_priv.param("icp_optimization_epsilon",icp_optimization_epsilon, 0.0000001);
     nh_priv.param("icp_score_scale",icp_score_scale, 100.0);
 
+    nh_priv.param("voxel_grid_size",voxel_grid_size_, 0.00025);
+
     nh_priv.param("use_map_topic", use_map_topic_, true);
     nh_priv.param("first_map_only", first_map_only_, false);
 
@@ -66,6 +67,9 @@ EKFnode::EKFnode(const ros::NodeHandle& nh, const double & spin_rate, const doub
     ROS_INFO_STREAM("alpha_2:"<<alpha_2);
     ROS_INFO_STREAM("alpha_3:"<<alpha_3);
     ROS_INFO_STREAM("alpha_4:"<<alpha_4);
+
+    ROS_INFO_STREAM("voxel_grid_size" << voxel_grid_size_);
+
 
     ROS_INFO_STREAM("max_correspondence_distance:"<<max_correspondence_distance);
     ROS_INFO_STREAM("max_iterations:"<<max_iterations);
@@ -157,7 +161,6 @@ EKFnode::EKFnode(const ros::NodeHandle& nh, const double & spin_rate, const doub
     {
         requestMap();
     }
-    timer_ = nh_.createTimer(ros::Duration(1.0/std::max(spin_rate,1.0)), &EKFnode::spin, this);
 
     laser_sub = nh_.subscribe("scan", 1, &EKFnode::laser_callback, this);
     location_undertainty = nh_.advertise<visualization_msgs::Marker>("/location_undertainty",1);
@@ -241,7 +244,7 @@ void EKFnode::laser_callback(const sensor_msgs::LaserScan::ConstPtr& msg)
 
     // Downsample
     pcl::VoxelGrid<point_type> voxel_grid;
-    voxel_grid.setLeafSize (voxel_grid_size, voxel_grid_size, voxel_grid_size);
+    voxel_grid.setLeafSize (voxel_grid_size_, voxel_grid_size_, voxel_grid_size_);
     voxel_grid.setInputCloud (laser);
     voxel_grid.filter (*laser);
 
@@ -563,7 +566,7 @@ void EKFnode::convertMap( const nav_msgs::OccupancyGrid& map_msg)
     }
 
     pcl::VoxelGrid<point_type> voxel_grid;
-    voxel_grid.setLeafSize (voxel_grid_size, voxel_grid_size, voxel_grid_size);
+    voxel_grid.setLeafSize (voxel_grid_size_, voxel_grid_size_, voxel_grid_size_);
     voxel_grid.setInputCloud (map_);
     voxel_grid.filter (*map_);
 
@@ -571,35 +574,47 @@ void EKFnode::convertMap( const nav_msgs::OccupancyGrid& map_msg)
 
 
 
-void EKFnode::spin(const ros::TimerEvent& e)
+void EKFnode::spin()
 {
+    double spin_rate = 50.0;
+    nh_priv.param("spin_rate",spin_rate, 50.0);
+    ros::Rate r(spin_rate);
 
-    // initial value for filter stamp; keep this stamp when no sensors are active
-    filter_stamp_ = ros::Time::now();
-
-    predict();
-
-    // Check callbacks
-    ros::spinOnce();
-
-    // only update filter when one of the sensors is active
-    if (odom_active_ || laser_active_)
+    while(ros::ok())
     {
-        if (odom_active_)  filter_stamp_ = std::min(filter_stamp_, odom_last_stamp_);
-        if (laser_active_)   filter_stamp_ = std::min(filter_stamp_, laser_last_stamp_);
+        // Check callbacks
+        ros::spinOnce();
 
-        // Publish stuff
-        Eigen::Matrix2f covMatrix;
-        BFL::Pdf<BFL::ColumnVector> * posterior = filter->PostGet();
-        BFL::SymmetricMatrix estimated_cov=posterior->CovarianceGet();
+        // initial value for filter stamp; keep this stamp when no sensors are active
+        filter_stamp_ = ros::Time::now();
 
-        covMatrix(0,0)=estimated_cov(1,1);
-        covMatrix(0,1)=estimated_cov(1,2);
+        // Prediction step
+        predict();
 
-        covMatrix(1,0)=estimated_cov(2,1);
-        covMatrix(1,1)=estimated_cov(2,2);
-        drawCovariance(covMatrix);
+        // Only update filter when one of the sensors is active
+        if (odom_active_ || laser_active_)
+        {
+            if (odom_active_)  filter_stamp_ = std::min(filter_stamp_, odom_last_stamp_);
+            else ROS_WARN_THROTTLE(1.0, "Odometry not yet active");
 
-        publishFeatures();
+            if (laser_active_)   filter_stamp_ = std::min(filter_stamp_, laser_last_stamp_);
+            else ROS_WARN_THROTTLE(1.0, "Laser not yet active");
+
+            // Publish stuff
+            Eigen::Matrix2f covMatrix;
+            BFL::Pdf<BFL::ColumnVector> * posterior = filter->PostGet();
+            BFL::SymmetricMatrix estimated_cov=posterior->CovarianceGet();
+
+            covMatrix(0,0)=estimated_cov(1,1);
+            covMatrix(0,1)=estimated_cov(1,2);
+
+            covMatrix(1,0)=estimated_cov(2,1);
+            covMatrix(1,1)=estimated_cov(2,2);
+            drawCovariance(covMatrix);
+
+            publishFeatures();
+        }
+
+        r.sleep();
     }
 }

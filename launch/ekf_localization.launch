@@ -1,18 +1,18 @@
 <?xml version="1.0"?>
 <launch>
-  <arg name="scan_topic" default="scan" />
-  <arg name="rosbag_file_1" default="homework1/dataset/dataset_2013-10-09-15-10-03.bag" />
-  <arg name="map_file" default="$(find advanced_robotics)/homework1/maps/gmapping/map" />
+  <!-- Map file path, without extensions -->
+  <arg name="map_file" default="$(find YOUR_PACKAGE)/maps/map" />
 
-  <param name="use_sim_time" value="true" />
-
-  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find ekf_localization)/rviz/ekf_localization.rviz" />
-
+  <!-- EKF Localization node, needs the map file as an argument for feature extraction -->
   <node name="ekf_localization_node" pkg="ekf_localization" type="ekf_localization_node" output="screen" args="$(arg map_file).pgm">
-    <rosparam file="$(find ekf_localization)/config/parameters.yaml" command="load" />
-  </node>
-  <node name="map_server" pkg="map_server" type="map_server"  args="$(arg map_file).yaml" />
-  <node pkg="rosbag" type="play" name="player" output="log" args="--clock $(find advanced_robotics)/$(arg rosbag_file_1)" />
-  <node pkg="tf" type="static_transform_publisher" name="base_to_laser_frame" args="0.15 0 0 0 0 0  /base_link /laser_frame 50" />
 
+    <!-- Most parameters are loaded from this file -->
+    <rosparam file="$(find ekf_localization)/config/parameters.yaml" command="load" />
+
+    <!-- The base frame of the robot, where odometry is applied. Usuall base_link or base_footprint -->
+    <param name="base_frame_id" value="base_link"/>
+
+    <!-- The frame of the laser scanner. Usuall scan, base_scan, laser_link, etc. -->
+    <param name="laser_frame_id" value="base_scan"/>
+  </node>
 </launch>
