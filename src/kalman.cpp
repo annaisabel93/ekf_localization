@@ -190,7 +190,7 @@ void EKFnode::laser_callback(const sensor_msgs::LaserScan::ConstPtr& msg)
         }
         else
         {
-            ROS_ERROR("Waiting to activate Laser, because Laser measurements are still %f sec in the future.",
+            ROS_WARN("Waiting to activate Laser, because Laser measurements are still %f sec in the future.",
                       (laser_init_stamp_ - filter_stamp_).toSec());
             return;
         }
@@ -291,8 +291,7 @@ void EKFnode::laser_callback(const sensor_msgs::LaserScan::ConstPtr& msg)
 
         if(filter->PostGet()->ExpectedValueGet()(3)>M_PI || filter->PostGet()->ExpectedValueGet()(3)<-M_PI)
         {
-            std::cout << filter->PostGet()->ExpectedValueGet()(3) << std::endl;
-            ROS_ERROR("FODA-SE");
+            ROS_FATAL_STREAM(filter->PostGet()->ExpectedValueGet()(3));
             exit(-1);
         }
         broadcast(msg->header.stamp);
@@ -333,7 +332,7 @@ bool EKFnode::predict()
         }
         else
         {
-            ROS_ERROR("Waiting to activate Odom, because odom measurements are still %f sec in the future.",
+            ROS_WARN("Waiting to activate Odom, because odom measurements are still %f sec in the future.",
                       (odom_init_stamp_ - filter_stamp_).toSec());
             return false;
         }
@@ -401,8 +400,7 @@ bool EKFnode::predict()
     filter->Update(sys_model.get(),control_mean);
     if(filter->PostGet()->ExpectedValueGet()(3)>M_PI || filter->PostGet()->ExpectedValueGet()(3)<-M_PI)
     {
-        std::cout << filter->PostGet()->ExpectedValueGet()(3) << std::endl;
-        ROS_ERROR("FODA-SE");
+        ROS_FATAL_STREAM(filter->PostGet()->ExpectedValueGet()(3));
         exit(-1);
     }
     broadcast(odom_time);
