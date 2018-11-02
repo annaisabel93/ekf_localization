@@ -26,6 +26,6 @@
   </node>
 
   <!-- Rviz visualization -->
-  <!-- node name="rviz" pkg="rviz" type="rviz" args="-d $(find ekf_localization)/rviz/ekf_localization.rviz" /> -->
+  <!-- node name="rviz" pkg="rviz" type="rviz" args="-d $(find ekf_localization)/rviz/ekf.rviz" /> -->
 
 </launch>

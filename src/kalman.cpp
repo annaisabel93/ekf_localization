@@ -196,25 +196,20 @@ void EKFnode::laser_callback(const sensor_msgs::LaserScan::ConstPtr& msg)
         }
     }
 
-    tf::StampedTransform laserToBaseTf;
     tf::StampedTransform baseDeltaTf;
 
     try
     {
-        listener->waitForTransform(map_link, laser_link, msg->header.stamp, ros::Duration(0.1) );
-        listener->waitForTransform(map_link, laser_link, msg->header.stamp+ros::Duration().fromSec((msg->ranges.size()-1)*msg->time_increment), ros::Duration(0.1) );
-        listener->lookupTransform(map_link, laser_link,  msg->header.stamp,  laserToBaseTf); // delta position
-        listener->lookupTransform(map_link, laser_link,  msg->header.stamp+ros::Duration().fromSec((msg->ranges.size()-1)*msg->time_increment),  laserToBaseTf); // delta position
-
-        listener->waitForTransform(base_link, laser_last_stamp_, base_link, msg->header.stamp , odom_link, ros::Duration(0.1) );
+        listener->waitForTransform(base_link, laser_last_stamp_, base_link, msg->header.stamp , odom_link, ros::Duration(0.2) );
         listener->lookupTransform(base_link, laser_last_stamp_, base_link, msg->header.stamp, odom_link, baseDeltaTf); // delta position
     }
     catch(tf::TransformException& ex)
     {
+        ROS_WARN_STREAM("When getting the base link transforms:" << std::endl << ex.what());
         laser_last_stamp_=msg->header.stamp;
-        ROS_WARN("%s",ex.what());
         return;
     }
+
     // If the robot has moved, update the filter
 
     double dx=baseDeltaTf.getOrigin().getX();
@@ -229,8 +224,19 @@ void EKFnode::laser_callback(const sensor_msgs::LaserScan::ConstPtr& msg)
 
     // Transform to sensor_msgs::PointCloud
     sensor_msgs::PointCloud2 cloud_msg;
-    projector_.transformLaserScanToPointCloud(map_link,*msg,
+    try
+    {
+        auto forgiving = *msg;
+        forgiving.header.stamp -= ros::Duration(0.3);
+
+        projector_.transformLaserScanToPointCloud(map_link,forgiving,
                                               cloud_msg,*listener);
+    }
+    catch(tf::TransformException& ex)
+    {
+        ROS_WARN_STREAM("When transforming laser scan to point cloud:" << std::endl << ex.what());
+        return ;
+    }
 
     // Transform to pcl
     pcl::PCLPointCloud2 pcl_pc;
@@ -297,6 +303,7 @@ void EKFnode::laser_callback(const sensor_msgs::LaserScan::ConstPtr& msg)
         broadcast(msg->header.stamp);
 
         laser_last_stamp_=msg->header.stamp;
+
         local_features_pub.publish(Final);
     }
     else
@@ -351,7 +358,7 @@ bool EKFnode::predict()
     {
         //odom_initialized_=false;
         odom_last_stamp_ = odom_time;
-        ROS_WARN("%s",ex.what());
+        ROS_WARN_STREAM("When getting transforms in predict():" << std::endl << ex.what());
         return false;
     }
 
@@ -406,9 +413,6 @@ bool EKFnode::predict()
     broadcast(odom_time);
 
     // Update filter stamp
-
-
-
     odom_last_stamp_=odom_time;
     return true;
 }
@@ -441,7 +445,7 @@ void EKFnode::broadcast(const ros::Time & broad_cast_time)
                                 tmp_tf_stamped,
                                 odom_to_map);
     }
-    catch(tf::TransformException)
+    catch(tf::TransformException& ex)
     {
         ROS_DEBUG("Failed to subtract base to odom transform");
         return;
